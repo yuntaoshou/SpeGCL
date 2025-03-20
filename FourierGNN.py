@@ -2,15 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def create_adjacency_matrix(args, edge_index, num_nodes):
-    row = edge_index[0]  
-    col = edge_index[1]  
-    value = torch.ones(edge_index.shape[1]).to(args.device)
-    A_sparse = torch.sparse.FloatTensor(
-        torch.stack([row, col]), value, torch.Size([num_nodes, num_nodes])
-    )
-    return A_sparse
-
 class FGN(nn.Module):
     def __init__(self, args, pre_length, embed_size,
                  feature_size, seq_length, hidden_size, hard_thresholding_fraction=1, hidden_size_factor=1, sparsity_threshold=0.01):
@@ -27,6 +18,8 @@ class FGN(nn.Module):
         self.hard_thresholding_fraction = hard_thresholding_fraction
         self.scale = 0.02
         self.embeddings = nn.Parameter(torch.randn(1, self.embed_size))
+
+        self.adj_matrix1 = nn.Parameter(torch.randn(1, 1))
 
         self.w1 = nn.Parameter(
             self.scale * torch.randn(2, self.frequency_size, self.frequency_size * self.hidden_size_factor))
@@ -56,7 +49,7 @@ class FGN(nn.Module):
         return x * y
 
     # FourierGNN
-    def fourierGC(self, x, N, L):
+    def fourierGC(self, x, edge_index, N, L):
         o1_real = torch.zeros([1, (N*L)//2 + 1, self.frequency_size * self.hidden_size_factor],
                               device=x.device)
         o1_imag = torch.zeros([1, (N*L)//2 + 1, self.frequency_size * self.hidden_size_factor],
@@ -66,6 +59,8 @@ class FGN(nn.Module):
 
         o3_real = torch.zeros(x.shape, device=x.device)
         o3_imag = torch.zeros(x.shape, device=x.device)
+        if self.adj_matrix1.shape != ((N*L)//2 + 1, (N*L)//2 + 1):  # 重新初始化
+            self.adj_matrix1 = nn.Parameter(torch.randn((N*L)//2 + 1, (N*L)//2 + 1).to(x.device))
 
         o1_real = F.relu(
             torch.einsum('bli,ii->bli', x.real, self.w1[0]) - \
@@ -73,11 +68,15 @@ class FGN(nn.Module):
             self.b1[0]
         )
 
+        o1_real = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o1_real)
+
         o1_imag = F.relu(
             torch.einsum('bli,ii->bli', x.imag, self.w1[0]) + \
             torch.einsum('bli,ii->bli', x.real, self.w1[1]) + \
             self.b1[1]
         )
+
+        o1_imag = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o1_imag)
 
         # 1 layer
         y = torch.stack([o1_real, o1_imag], dim=-1)
@@ -89,11 +88,15 @@ class FGN(nn.Module):
             self.b2[0]
         )
 
+        o2_real = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o2_real)
+
         o2_imag = F.relu(
             torch.einsum('bli,ii->bli', o1_imag, self.w2[0]) + \
             torch.einsum('bli,ii->bli', o1_real, self.w2[1]) + \
             self.b2[1]
         )
+
+        o2_imag = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o2_imag)
 
         # 2 layer
         x = torch.stack([o2_real, o2_imag], dim=-1)
@@ -106,11 +109,15 @@ class FGN(nn.Module):
                 self.b3[0]
         )
 
+        o3_real = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o3_real)
+
         o3_imag = F.relu(
                 torch.einsum('bli,ii->bli', o2_imag, self.w3[0]) + \
                 torch.einsum('bli,ii->bli', o2_real, self.w3[1]) + \
                 self.b3[1]
         )
+
+        o3_imag = torch.einsum("ij, bjk -> bik", self.adj_matrix1, o3_imag)
 
         # 3 layer
         z = torch.stack([o3_real, o3_imag], dim=-1)
@@ -131,7 +138,7 @@ class FGN(nn.Module):
         bias = x
 
         # FourierGNN
-        x = self.fourierGC(x, N, L)
+        x = self.fourierGC(x, edge_index, N, L)
 
         x = x + bias
 
@@ -144,7 +151,5 @@ class FGN(nn.Module):
         # projection
         x = torch.matmul(x, self.embeddings_10)
         x = x.reshape(N, -1)
-        A_sparse = create_adjacency_matrix(self.args, edge_index, N).to(self.args.device)
-        x = torch.sparse.mm(A_sparse, x)
         x = self.fc(x)
         return x
