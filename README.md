@@ -6,12 +6,8 @@
 
 # SpeGCL: Self-supervised Graph Spectrum Contrastive Learning without Positive Samples
 
-
-[![GitHub stars][stars-img]][stars-url]
-[![GitHub forks][fork-img]][fork-url]
-
 This is an official implementation of 'SpeGCL: Self-supervised Graph Spectrum Contrastive Learning without Positive Samples' :fire:.
 
 <div  align="center"> 
-  <img src="https://github.com/yuntaoshou/MCGRL/blob/main/1.png" width=100% />
+  <img src="https://github.com/yuntaoshou/SpeGCL/blob/main/fig/archicture.pdf" width=100% />
 </div>
