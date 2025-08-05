@@ -4,10 +4,6 @@
 [fork-url]: https://github.com/yuntaoshou/MCGRL/network/members
 [AKGR-url]: https://github.com/yuntaoshou/MCGRL
 
-# SpeGCL: Self-supervised Graph Spectrum Contrastive Learning without Positive Samples
-
-This is an official implementation of 'SpeGCL: Self-supervised Graph Spectrum Contrastive Learning without Positive Samples' :fire:.
-
 <div  align="center"> 
   <img src="https://github.com/yuntaoshou/SpeGCL/blob/main/fig/archi.png" width=100% />
 </div>
